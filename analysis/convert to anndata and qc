@@ -1,0 +1,33 @@
+import scipy.io
+import pandas as pd
+import anndata
+import numpy as np
+import scanpy as sc
+
+# Read the matrix and annotation files
+mat = scipy.io.mmread("genes/matrix.mtx")
+barcodes = pd.read_csv("genes/barcodes.tsv", header=None, sep="\t")
+genes = pd.read_csv("genes/genes.tsv", header=None, sep="\t")
+
+# Create AnnData object. Use gene symbols (column 2 of genes.tsv) as var index.
+adata = anndata.AnnData(
+    X=mat,
+    obs=pd.DataFrame(index=barcodes[0]),
+    var=pd.DataFrame(index=genes[1])
+)
+adata.obs.index.name = "barcode"
+adata.var.index.name = "gene_symbol"
+
+# Convert sparse matrix to CSR to enable filtering
+if hasattr(adata.X, "tocsr"):
+    adata.X = adata.X.tocsr()
+
+# Quality control metrics
+adata.obs['total_counts'] = np.array(adata.X.sum(axis=1)).flatten()
+adata.obs['n_genes'] = np.array((adata.X > 0).sum(axis=1)).flatten()
+
+# Filter cells with low counts (e.g., fewer than 1000 UMIs)
+sc.pp.filter_cells(adata, min_counts=1000)
+
+# Save the filtered AnnData object
+adata.write("my_data_filtered.h5ad")
