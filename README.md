@@ -25,18 +25,8 @@ This project demonstrates how to process raw single-cell RNA-seq FASTQ files usi
 
 ## Dataset
 
-We used paired-end FASTQ files from a single-cell RNA-seq experiment (e.g., `SRR30105682_1.fastq.gz` and `SRR30105682_2.fastq.gz`). Adjust the file names and paths as necessary for your dataset.
+For this I used paired-end FASTQ files from a single-cell RNA-seq experiment ( `SRR30105682_1.fastq.gz` and `SRR30105682_2.fastq.gz` from PRJNA1143044). 
 
-## Requirements
-
-- **kallisto** (version 0.45+ for BUS mode)
-- **bustools**
-- **Python 3.8+** with the following packages:
-  - Scanpy
-  - anndata
-  - scvi-tools
-  - numpy, pandas, matplotlib, scikit-learn
-- **Conda** is recommended for managing environments without sudo access.
 
 ## Installation
 
@@ -44,7 +34,7 @@ We used paired-end FASTQ files from a single-cell RNA-seq experiment (e.g., `SRR
 
 Create a new environment and install dependencies:
 ```bash
-conda create -n sc_pipeline python=3.9
-conda activate sc_pipeline
+conda create -n scvi_env python=3.10
+conda activate scvi_env
 conda install -c bioconda kallisto bustools
 pip install scanpy scvi-tools anndata numpy pandas matplotlib scikit-learn
