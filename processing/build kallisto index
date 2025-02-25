@@ -3,3 +3,4 @@ gunzip Homo_sapiens.GRCh38.cdna.all.fa.gz
 mv Homo_sapiens.GRCh38.cdna.all.fa human_transcripts.fa
 
 kallisto index -i human_transcriptome.idx human_transcripts.fa
+ 
