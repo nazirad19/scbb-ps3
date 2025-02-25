@@ -1,0 +1,600 @@
+# %%
+# Install packages for analysis and plotting
+from scipy.io import mmread
+from sklearn.decomposition import TruncatedSVD
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib
+
+from scipy.sparse import csr_matrix
+matplotlib.rcParams.update({'font.size': 22})
+%config InlineBackend.figure_format = 'retina'
+
+
+# %%
+# Read in the count matrix that was output by `kb`.
+mtx = mmread("/home/nazira.dunbayeva/Downloads/output/genes/matrix.mtx")
+
+
+# %%
+# Perform SVD
+tsvd = TruncatedSVD(n_components=2)
+tsvd.fit(mtx)
+X = tsvd.transform(mtx)
+
+
+# %%
+# Plot the cells in the 2D PCA projection
+fig, ax = plt.subplots(figsize=(10, 7))
+
+ax.scatter(X[:,0], X[:,1], alpha=0.5, c="green")
+
+plt.axis('off')
+plt.show()
+
+
+# %%
+# density display for PCA plot
+from scipy.interpolate import interpn
+
+def density_scatter( x , y, ax = None, sort = True, bins = 20, **kwargs )   :
+    """
+    Scatter plot colored by 2d histogram
+    """
+    if ax is None :
+        fig , ax = plt.subplots()
+    data , x_e, y_e = np.histogram2d( x, y, bins = bins)
+    z = interpn( ( 0.5*(x_e[1:] + x_e[:-1]) , 0.5*(y_e[1:]+y_e[:-1]) ) , data , np.vstack([x,y]).T , method = "splinef2d", bounds_error = False )
+
+    # Sort the points by density, so that the densest points are plotted last
+    if sort :
+        idx = z.argsort()
+        x, y, z = x[idx], y[idx], z[idx]
+
+    sc = ax.scatter( x, y, c=z, **kwargs )
+    return sc
+
+fig, ax = plt.subplots(figsize=(7,7))
+
+x = X[:,0]
+y = X[:,1]
+
+sc = density_scatter(x, y, ax=ax, cmap="Greens")
+
+fig.colorbar(sc, ax=ax)
+plt.axis('off')
+
+plt.show()
+
+
+# %%
+# Create sparse matrix representation of the count matrix
+mtx = csr_matrix(mtx)
+
+
+# %%
+# Create a plot showing genes detected as a function of UMI counts.
+fig, ax = plt.subplots(figsize=(10, 7))
+
+ax.scatter(np.asarray(mtx.sum(axis=1))[:,0], np.asarray(np.sum(mtx>0, axis=1))[:,0], color="green", alpha=0.01)
+ax.set_xlabel("UMI Counts")
+ax.set_ylabel("Genes Detected")
+ax.set_xscale('log')
+ax.set_yscale('log', nonposy='clip')
+
+ax.set_xlim((0.5, 4500))
+ax.set_ylim((0.5,2000))
+
+
+plt.show()
+
+
+# %%
+# Create the "knee plot"
+knee = np.sort((np.array(mtx.sum(axis=1))).flatten())[::-1]
+fig, ax = plt.subplots(figsize=(10, 7))
+
+ax.loglog(knee, range(len(knee)),linewidth=5, color="g")
+
+ax.set_xlabel("UMI Counts")
+ax.set_ylabel("Set of Barcodes")
+
+plt.grid(True, which="both")
+plt.show()
+
+
+# %%
+# An option is to filter the cells and genes by a threshold
+# row_mask = np.asarray(mtx.sum(axis=1)>30).reshape(-1)
+# col_mask = np.asarray(mtx.sum(axis=0)>0).reshape(-1)
+# mtx_filtered = mtx[row_mask,:][:,col_mask]
+
+
+# %%
+# # Create the flipped and rotated "knee plot"
+# knee = np.sort((np.array(mtx.sum(axis=1))).flatten())[::-1]
+# fig, ax = plt.subplots(figsize=(10, 7))
+# 
+# ax.loglog(range(len(knee)), knee,linewidth=5, color="g")
+# 
+# ax.set_xlabel("Set of Barcodes")
+# ax.set_ylabel("UMI Counts")
+# 
+# plt.grid(True, which="both")
+# plt.show()
+
+
+# %%
+#@title Exploring PCA subspsaces { run: "auto", vertical-output: true, display-mode: "both" }
+n_components =  2#@param {type:"integer"}
+dimension_A =  1#@param {type:"integer"}
+dimension_B =  2#@param {type:"integer"}
+# Perform SVD
+tsvd = TruncatedSVD(n_components)
+tsvd.fit(mtx)
+X = tsvd.transform(mtx)
+
+# Plot the cells in the 2D PCA projection
+fig, ax = plt.subplots(figsize=(10, 7))
+
+ax.scatter(X[:,dimension_A-1], X[:,dimension_B-1], alpha=0.5, c="green")
+
+plt.axis('off')
+plt.show()
+
+
+# %%
+
+
+# %%
+import pandas as pd
+from scipy.io import mmread
+import anndata
+
+# Read the matrix, barcodes, and genes files
+matrix = mmread('/home/nazira.dunbayeva/Downloads/output/genes/matrix.mtx')
+barcodes = pd.read_csv('/home/nazira.dunbayeva/Downloads/output/genes/barcodes.tsv', header=None, sep='\t')
+genes = pd.read_csv('/home/nazira.dunbayeva/Downloads/output/genes/genes.tsv', header=None, sep='\t')
+
+# Check the shapes:
+print("Matrix shape:", matrix.shape)  # Expecting (n_cells, n_genes)
+print("Barcodes shape:", barcodes.shape)  # (n_cells, 1)
+print("Genes shape:", genes.shape)  # (n_genes, 1)
+
+# Create the AnnData object
+adata = anndata.AnnData(X=matrix, obs=pd.DataFrame(index=barcodes[0]), var=pd.DataFrame(index=genes[0]))
+
+print(adata)
+
+
+# %%
+adata = adata.copy()  # Create a full copy so that X is not a view
+adata.X = adata.X.tocsr()
+
+
+# %%
+import numpy as np
+adata.obs['total_counts'] = np.array(adata.X.sum(axis=1)).flatten()
+
+
+# %%
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Suppose 'counts' is your total UMI count array, sorted in descending order
+counts = np.array(adata.X.sum(axis=1)).flatten()
+counts_sorted = np.sort(counts)[::-1]
+
+# Plot only the top 50k barcodes (or fewer if total < 50k)
+max_plot = 50000
+n = len(counts_sorted)
+plot_limit = min(n, max_plot)
+counts_subset = counts_sorted[:plot_limit]
+
+plt.figure(figsize=(6, 4))
+plt.plot(range(plot_limit), counts_subset, marker='.', linestyle='none', alpha=0.5)
+plt.axhline(y=1000, color='r', linestyle='--', label='Cutoff = 1000')
+plt.yscale('log')  # log scale on Y
+plt.xlabel("Cell rank (sorted)")
+plt.ylabel("Total UMI counts (log scale)")
+plt.title("Knee Plot (top 50k barcodes)")
+plt.legend()
+plt.show()
+
+
+# %%
+# Compute unique genes per cell.
+adata.obs['n_genes'] = np.array((adata.X > 0).sum(axis=1)).flatten()
+
+plt.figure(figsize=(6,4))
+plt.scatter(adata.obs['n_genes'], adata.obs['total_counts'], alpha=0.5)
+plt.xlabel("Unique Genes per cell")
+plt.ylabel("Total UMI counts")
+plt.title("Unique Genes vs. UMI Counts")
+plt.show()
+
+
+# %%
+# Suppose your var DataFrame has a column 'species' indicating 'human' or 'mouse'.
+# For demonstration, we simulate species separation:
+# (In practice, you’d annotate your genes with species information.)
+
+# Example: Let’s assume genes starting with 'HG' are human and 'MG' are mouse.
+# For now, we create a dummy column; replace this with your actual annotation.
+adata.var['species'] = ['human' if gene.startswith('ENSG') else 'mouse' for gene in adata.var_names]
+
+# Sum counts by species per cell.
+human_counts = np.array(adata[:, adata.var['species'] == 'human'].X.sum(axis=1)).flatten()
+mouse_counts = np.array(adata[:, adata.var['species'] == 'mouse'].X.sum(axis=1)).flatten()
+
+# Total counts (should be same as adata.obs['total_counts'])
+total_counts = human_counts + mouse_counts
+
+# Fraction of human transcripts.
+human_frac = human_counts / total_counts
+
+plt.figure(figsize=(6,4))
+plt.scatter(total_counts, human_frac, alpha=0.5)
+plt.xlabel("Total UMI counts per cell")
+plt.ylabel("Fraction of Human transcripts")
+plt.title("Total UMI Counts vs. Fraction of Human Transcripts")
+plt.show()
+
+
+# %%
+import scanpy as sc
+
+# Normalize and log-transform the data.
+sc.pp.normalize_total(adata, target_sum=1e4)
+sc.pp.log1p(adata)
+
+# Identify highly variable genes and subset.
+sc.pp.highly_variable_genes(adata, min_mean=0.0125, max_mean=3, min_disp=0.5)
+adata = adata[:, adata.var.highly_variable]
+
+# Scale the data.
+sc.pp.scale(adata, max_value=10)
+
+# Perform PCA.
+sc.tl.pca(adata, svd_solver='arpack')
+
+# Plot PCA scatter plots.
+import matplotlib.pyplot as plt
+
+# PC1 vs PC2
+plt.figure(figsize=(6,6))
+plt.scatter(adata.obsm['X_pca'][:, 0], adata.obsm['X_pca'][:, 1], alpha=0.5)
+plt.xlabel("PC1")
+plt.ylabel("PC2")
+plt.title("PCA: PC1 vs PC2")
+plt.show()
+
+# PC2 vs PC3
+plt.figure(figsize=(6,6))
+plt.scatter(adata.obsm['X_pca'][:, 1], adata.obsm['X_pca'][:, 2], alpha=0.5)
+plt.xlabel("PC2")
+plt.ylabel("PC3")
+plt.title("PCA: PC2 vs PC3")
+plt.show()
+
+# PC1 vs PC3
+plt.figure(figsize=(6,6))
+plt.scatter(adata.obsm['X_pca'][:, 0], adata.obsm['X_pca'][:, 2], alpha=0.5)
+plt.xlabel("PC1")
+plt.ylabel("PC3")
+plt.title("PCA: PC1 vs PC3")
+plt.show()
+
+
+# %%
+import scanpy as sc
+import anndata
+
+# Assuming 'adata' is your AnnData object from the gene count matrix.
+# Convert the observation index (e.g. cell barcodes) to strings:
+adata.obs.index = adata.obs.index.astype(str)
+
+# (Optional) Ensure the variable index (genes) is also in string format:
+adata.var.index = adata.var.index.astype(str)
+
+# Now save your AnnData object:
+adata.write("my_data.h5ad")
+
+
+# %%
+import scvi
+print(scvi.__version__)
+
+
+# %%
+# If you have batch information, e.g. adata.obs["batch"], specify batch_key. Otherwise, omit it.
+scvi.model.SCVI.setup_anndata(adata, batch_key=None)
+
+# Initialize the SCVI model
+model = scvi.model.SCVI(adata, n_hidden=128)  # n_hidden can be tuned
+
+
+# %%
+model.train(max_epochs=100)  # Adjust epochs as needed
+
+
+# %%
+adata.obsm["X_scVI"] = model.get_latent_representation()
+
+# Next, compute neighbors on this new embedding
+sc.pp.neighbors(adata, use_rep="X_scVI")
+
+# Then compute UMAP
+sc.tl.umap(adata)
+
+# Plot UMAP
+sc.pl.umap(adata, color=["batch"] if "batch" in adata.obs else None)
+
+
+# %%
+sc.tl.leiden(adata, resolution=0.5)  # tune resolution
+sc.pl.umap(adata, color=["leiden"])
+
+
+# %%
+de_results = model.differential_expression(
+    groupby="leiden",
+    group1="0",
+    group2="1",
+    mode="change",  # "change" for log fold-change, or "vanilla" for Bayesian test
+)
+
+
+# %%
+# Sort by bayes_factor or log fold change, for example:
+top_markers = de_results.sort_values("bayes_factor", ascending=False).head(20)
+print(top_markers)
+
+
+# %%
+import scanpy as sc
+import scvi
+import anndata
+
+# 1. Load or create AnnData
+adata = sc.read_10x_mtx("genes/", var_names="gene_symbols")
+adata.var_names_make_unique()
+
+# 2. Setup scvi-tools
+scvi.model.SCVI.setup_anndata(adata, batch_key=None)
+
+# 3. Initialize and Train
+model = scvi.model.SCVI(adata, n_hidden=128)
+model.train(max_epochs=100)
+
+# 4. Get latent space, compute UMAP
+adata.obsm["X_scVI"] = model.get_latent_representation()
+sc.pp.neighbors(adata, use_rep="X_scVI")
+sc.tl.umap(adata)
+
+# 5. Cluster (Leiden)
+sc.tl.leiden(adata, resolution=0.5)
+
+# 6. Plot UMAP colored by Leiden clusters
+sc.pl.umap(adata, color=["leiden"])
+
+# 7. Differential Expression (example: cluster "0" vs "1")
+de_results = model.differential_expression(
+    groupby="leiden",
+    group1="0",
+    group2="1",
+    mode="change",
+)
+top_markers = de_results.sort_values("bayes_factor", ascending=False).head(10)
+print(top_markers)
+
+
+# %%
+
+
+# %%
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Compute total UMIs per cell.
+adata.obs['total_counts'] = np.array(adata.X.sum(axis=1)).flatten()
+
+# Sort counts in descending order.
+sorted_counts = np.sort(adata.obs['total_counts'])[::-1]
+
+plt.figure(figsize=(6,4))
+plt.plot(sorted_counts, marker='.', linestyle='none')
+plt.xlabel("Cell rank (sorted)")
+plt.ylabel("Total UMI counts")
+plt.title("Knee Plot")
+plt.axhline(y=1000, color='r', linestyle='--', label='Cutoff = 1000')
+plt.legend()
+plt.show()
+
+# Choose cutoff based on the knee (here, 1000 UMIs)
+cutoff = 1000
+print(f"Number of cells before filtering: {adata.n_obs}")
+adata = adata[adata.obs['total_counts'] >= cutoff, :]
+print(f"Number of cells after filtering: {adata.n_obs}")
+
+
+# %%
+
+
+# %%
+import scipy.io
+import pandas as pd
+import anndata
+import scvi
+import numpy as np
+import matplotlib.pyplot as plt
+
+# ----- Step 1: Manually load the 10x-formatted files -----
+
+# Read the count matrix (which is in cells x genes format)
+mat = scipy.io.mmread("genes/matrix.mtx")  # Expected shape: (cells, genes)
+print("Matrix shape (cells x genes):", mat.shape)
+
+# Read the barcodes file (each line is a cell barcode)
+barcodes = pd.read_csv("genes/barcodes.tsv", header=None, sep="\t")
+print("Barcodes shape:", barcodes.shape)
+
+# Read the genes file.
+# Assuming your genes.tsv has two columns: [gene_id, gene_symbol]
+genes = pd.read_csv("genes/genes.tsv", header=None, sep="\t")
+print("Genes shape:", genes.shape)
+
+# Create the AnnData object manually.
+# Use gene symbols (the second column) as var index.
+adata = anndata.AnnData(X=mat,
+                        obs=pd.DataFrame(index=barcodes[0]),
+                        var=pd.DataFrame(index=genes[1]))
+print("AnnData shape (cells x genes):", adata.shape)
+
+# Set meaningful names for obs and var indices.
+adata.obs.index.name = "barcode"
+adata.var.index.name = "gene_symbol"
+
+# ----- Convert the count matrix to a subscriptable format (CSR) -----
+if hasattr(adata.X, "tocsr"):
+    adata.X = adata.X.tocsr()
+
+# ----- Step 2: Basic QC and Filtering -----
+# Compute total counts and number of genes per cell
+adata.obs['total_counts'] = np.array(adata.X.sum(axis=1)).flatten()
+adata.obs['n_genes'] = np.array((adata.X > 0).sum(axis=1)).flatten()
+
+print("Number of cells before filtering:", adata.n_obs)
+# Filter out cells with fewer than 1000 total counts
+sc.pp.filter_cells(adata, min_counts=1000)
+print("Number of cells after filtering:", adata.n_obs)
+
+
+# %%
+adata.write("my_data_filtered.h5ad")
+
+
+# %%
+import scvi
+
+# Set up the AnnData object for scvi‑tools
+scvi.model.SCVI.setup_anndata(adata, batch_key=None)
+
+# Initialize the SCVI model; n_hidden is the size of the hidden layer (adjust if needed)
+model = scvi.model.SCVI(adata, n_hidden=128)
+
+# Train the model; adjust max_epochs as needed for your data
+model.train(max_epochs=100)
+
+
+# %%
+# Extract latent representation
+adata.obsm["X_scVI"] = model.get_latent_representation()
+
+# Compute neighbors using the scvi latent space
+sc.pp.neighbors(adata, use_rep="X_scVI")
+
+# Compute UMAP on the latent space
+sc.tl.umap(adata)
+
+# Plot the UMAP colored by a quality metric (e.g., total counts) or any metadata
+sc.pl.umap(adata, color=["total_counts"], title="scVI Latent Space UMAP")
+
+
+# %%
+# Run Leiden clustering; adjust resolution as needed
+sc.tl.leiden(adata, resolution=0.5)
+
+# Visualize the clusters on the UMAP
+sc.pl.umap(adata, color=["leiden"], title="Leiden Clusters on scVI Latent Space")
+
+
+# %%
+# Differential expression analysis comparing cluster "0" and cluster "1"
+de_results = model.differential_expression(
+    groupby="leiden",
+    group1="0",
+    group2="1",
+    mode="change"  # Use mode "change" to get log fold-changes and bayes factors
+)
+
+# Sort results by bayes_factor and display the top marker genes
+top_markers = de_results.sort_values("bayes_factor", ascending=False).head(10)
+print("Top Differentially Expressed Genes (cluster 0 vs 1):")
+print(top_markers)
+
+
+# %%
+import scanpy as sc
+import matplotlib.pyplot as plt
+
+# -----------------------------------------------------------
+# Assuming the SCVI model is trained and adata.obsm["X_scVI"] exists
+# -----------------------------------------------------------
+
+# 1. PCA on the scVI latent space
+# Here, we compute PCA using the scVI latent representation.
+# We set use_rep="X_scVI" so that PCA is computed on the latent space rather than raw data.
+sc.tl.pca(adata, use_rep="X_scVI")
+sc.pl.pca(adata, color=["leiden"] + (["batch"] if "batch" in adata.obs.columns else []),
+          title="PCA of scVI Latent Space", save="_pca.png")
+
+# 2. t-SNE on the scVI latent space
+# Compute t-SNE using the latent space representation.
+sc.tl.tsne(adata, use_rep="X_scVI")
+sc.pl.tsne(adata, color=["leiden"] + (["batch"] if "batch" in adata.obs.columns else []),
+           title="t-SNE of scVI Latent Space", save="_tsne.png")
+
+# 3. UMAP colored by batch (if batch metadata exists) along with Leiden clustering
+if "batch" in adata.obs.columns:
+    sc.pl.umap(adata, color=["leiden", "batch", "total_counts"],
+               title="UMAP: Leiden Clusters and Batch", save="_umap_batch.png")
+else:
+    sc.pl.umap(adata, color=["leiden", "total_counts"],
+               title="UMAP: Leiden Clusters", save="_umap.png")
+
+# 4. Differential Expression and Manual Interpretation
+# (Assuming you've already performed DE between two clusters, e.g. clusters "0" and "1")
+de_results = model.differential_expression(
+    groupby="leiden",
+    group1="0",
+    group2="1",
+    mode="change"
+)
+# Print the top marker genes for further manual investigation.
+top_markers = de_results.sort_values("bayes_factor", ascending=False).head(10)
+print("Top marker genes for clusters 0 vs 1:")
+print(top_markers)
+
+# At this point, you can take the top marker genes, search them (e.g., on GeneCards or PubMed)
+# and manually assess whether they correspond to expected cell types.
+
+
+# %%
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+import pandas as pd
+
+# Compute PCA on the scVI latent space with n_components set to 10
+pca_model = PCA(n_components=10)
+adata.obsm["X_pca_scVI"] = pca_model.fit_transform(adata.obsm["X_scVI"])
+
+# Convert Leiden clusters to numeric codes for plotting
+leiden_codes = pd.Categorical(adata.obs["leiden"]).codes
+
+# Plot PCA (PC1 vs PC2) colored by Leiden clusters
+plt.figure(figsize=(6,6))
+sc_plot = plt.scatter(adata.obsm["X_pca_scVI"][:, 0],
+                      adata.obsm["X_pca_scVI"][:, 1],
+                      c=leiden_codes, cmap="viridis", alpha=0.7)
+plt.xlabel("PC1")
+plt.ylabel("PC2")
+plt.title("PCA of scVI Latent Space (manual)")
+plt.colorbar(sc_plot, label="Leiden cluster code")
+plt.show()
+
+
+# %%
+
+
+
