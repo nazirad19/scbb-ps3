@@ -1,0 +1,1 @@
+kallisto bus -i human_transcriptome.idx -o output/ -x 10xv2 SRR30105682_1.fastq.gz SRR30105682_2.fastq.gz
