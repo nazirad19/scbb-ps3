@@ -1,0 +1,18 @@
+# Generate a whitelist from the BUS file:
+bustools whitelist output.bus -o whitelist.txt
+
+# Correct barcodes using the whitelist:
+bustools correct -w whitelist.txt -o output.correct.bus output.bus
+
+# Sort the corrected BUS file:
+bustools sort -T tmp/ -t 4 -o output.sorted.bus output.correct.bus
+
+# Generate a gene count matrix:
+# Note: Ensure you have a mapping file (transcripts_to_genes.txt) generated from a GTF file.
+bustools count -o genesoutput -g transcripts_to_genes.txt -e matrix.ec -t transcripts.txt --genecounts output.sorted.bus
+
+# (Optional) Rename output files to match 10x conventions:
+mkdir -p genes
+mv genesoutput.mtx genes/matrix.mtx
+mv genesoutput.genes.txt genes/genes.tsv
+mv genesoutput.barcodes.txt genes/barcodes.tsv
