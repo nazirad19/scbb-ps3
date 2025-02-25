@@ -1,0 +1,31 @@
+import scvi
+
+# Set up AnnData for scvi-tools. Include batch_key if available.
+scvi.model.SCVI.setup_anndata(adata, batch_key=None)
+
+# Initialize and train the SCVI model
+model = scvi.model.SCVI(adata, n_hidden=128)
+model.train(max_epochs=100)
+
+# Extract latent representation
+adata.obsm["X_scVI"] = model.get_latent_representation()
+
+# Compute UMAP based on the scVI latent space
+sc.pp.neighbors(adata, use_rep="X_scVI")
+sc.tl.umap(adata)
+sc.pl.umap(adata, color=["total_counts"], title="UMAP of scVI Latent Space")
+
+# Cluster using Leiden clustering
+sc.tl.leiden(adata, resolution=0.5)
+sc.pl.umap(adata, color=["leiden"], title="Leiden Clusters on scVI Latent Space")
+
+# Differential expression between two clusters (e.g., clusters "0" and "1")
+de_results = model.differential_expression(
+    groupby="leiden",
+    group1="0",
+    group2="1",
+    mode="change"
+)
+top_markers = de_results.sort_values("bayes_factor", ascending=False).head(10)
+print("Top marker genes for clusters 0 vs 1:")
+print(top_markers)
